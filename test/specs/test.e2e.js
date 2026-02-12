@@ -1,4 +1,4 @@
-describe("Practical Tas", () => {
+describe("ToolShop User Journey", () => {
   let assert;
   let expectChai;
   let should;
