@@ -38,11 +38,6 @@ class RegisterPage extends Page {
     return $('[data-test="register-submit"]');
   }
 
-  /**
-   * Wypełnia i wysyła formularz rejestracyjny
-   * @param {Object} userData - Obiekt zawierający dane użytkownika
-   */
-
   async registerUser(userData) {
     await this.inputFirstName.waitForDisplayed();
 
