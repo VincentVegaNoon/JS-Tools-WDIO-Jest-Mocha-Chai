@@ -1,242 +1,120 @@
-describe("Practical Tas", () => {
-  let assert;
-  let expectChai;
-  let should;
+import { expect as expectChai, assert } from "chai";
+import * as chai from "chai";
+chai.should();
+import HomePage from "../../pageobjects/home.page.js";
+import Navbar from "../../pageobjects/navbar.page.js";
+import LoginPage from "../../pageobjects/login.page.js";
+import RegisterPage from "../../pageobjects/register.page.js";
+import ProductPage from "../../pageobjects/product.page.js";
+import CartPage from "../../pageobjects/cart.page.js";
+import CheckoutPage from "../../pageobjects/checkout.page.js";
+import ProfilePage from "../../pageobjects/profile.page.js";
+import FavoritesPage from "../../pageobjects/favorites.page.js";
 
-  const baseUrl = "https://practicesoftwaretesting.com";
-  let userEmail = `testuser_${Date.now()}@example.com`;
-  const password = "Testp3232ass123!";
-
+describe("ToolShop User Journey", () => {
   before(async () => {
-    const chai = await import("chai");
-    assert = chai.assert;
-    expectChai = chai.expect;
-    should = chai.should();
-  });
-
-  beforeEach(async () => {
-    await browser.url(baseUrl);
-    await browser.maximizeWindow();
+    await HomePage.open();
   });
 
   it("1. Search for a product", async () => {
-    const searchInput = await $('[data-test="search-query"]');
-    const searchBtn = await $('[data-test="search-submit"]');
+    const searchQuery = "Hammer";
+    await HomePage.searchForProduct(searchQuery);
+    const results = await HomePage.getVisibleProductNames();
 
-    await searchInput.setValue("Claw Hammer");
-    await searchBtn.click();
-
-    await browser.waitUntil(
-      async () => {
-        const text = await $(".card-title").getText();
-        return text.includes("Claw Hammer");
-      },
-      {
-        timeout: 5000,
-        timeoutMsg: "Claw Hammer not found",
-      },
-    );
+    expectChai(results.length).to.be.above(0, "Should find atleast one product");
+    expectChai(results[0]).to.include(searchQuery);
   });
-
   it("6. New user registration", async () => {
-    await $('[data-test="nav-sign-in"]').click();
-    await $('[data-test="register-link"]').click();
+    await Navbar.goToLogin();
+    await LoginPage.goToRegistration();
+    // const uniqueEmail = `jan.kowalski_${Date.now()}@example.com`;
 
-    await $("#first_name").setValue("Jan");
-    await $("#last_name").setValue("Kowalski");
-    await $("#dob").setValue("1990-01-01");
-    await $("#street").setValue("Testowa");
-    await $("#postal_code").setValue("00-000");
-    await $("#city").setValue("Warszawa");
-    await $("#state").setValue("Mazowieckie");
-    await $("#country").selectByVisibleText("Poland");
-    await $("#phone").setValue("123456789");
-    await $("#email").setValue(userEmail);
-    await $("#password").setValue(password);
-    await $('[data-test="register-submit"]').click();
+    await RegisterPage.registerUser({
+      firstName: "Jan",
+      lastName: "Kowalski",
+      dob: "1990-01-01",
+      address: "Prosta 1",
+      postcode: "00-001",
+      city: "Warszawa",
+      state: "Mazowieckie",
+      country: "Poland",
+      phone: "123456789",
+      email: process.env.TEST_USER_EMAIL,
+      password: process.env.TEST_USER_PASSWORD,
+    });
 
     await browser.waitUntil(
       async () => {
         const url = await browser.getUrl();
-        return url.includes("/auth/login");
+        return url.includes("login");
       },
       {
         timeout: 5000,
-        timeoutMsg: "Didn't redirect to login page after 5s",
+        timeoutMsg: "After registration user was not redirected to login page",
       },
     );
-    const url = await browser.getUrl();
 
-    assert.include(url, "auth/login", "URL should contain auth/login after registration");
+    const currentUrl = await browser.getUrl();
+    assert.include(currentUrl, "login", "URL should contain 'login' after registration");
   });
-
   it("2. Successful login", async () => {
-    await $('[data-test="nav-sign-in"]').click();
-    await $("#email").setValue(userEmail);
-    await $("#password").setValue(password);
-    await $('[data-test="login-submit"]').click();
-
-    const myAccountHeader = await $('h1[data-test="page-title"]');
-    await myAccountHeader.waitForDisplayed();
-
-    const headerText = await myAccountHeader.getText();
-
-    headerText.should.equal("My account");
+    await Navbar.goToLogin();
+    await LoginPage.login(process.env.TEST_USER_EMAIL, process.env.TEST_USER_PASSWORD);
+    await LoginPage.pageTitle.waitForDisplayed({
+      timeout: 5000,
+      timeoutMsg: "After login, account page was not displayed",
+    });
+    const titleText = await LoginPage.pageTitle.getText();
+    titleText.should.equal("My account");
   });
-
   it("3. Filter and sort products", async () => {
-    const categoryLabel = await $("label=Hand Tools");
-    await categoryLabel.waitForDisplayed();
-    await categoryLabel.click();
-    const sortDropdown = await $('select[data-test="sort"]');
-    await sortDropdown.selectByVisibleText("Name (A - Z)");
+    await HomePage.open();
+    await HomePage.filterByCategory("Hand Tools");
+    await HomePage.sortByText("Name (A - Z)");
 
-    await browser.pause(1000);
-
-    const products = await $$(".card-title");
-
-    const originalNames = await products.map((element) => element.getText());
+    const originalNames = await HomePage.getVisibleProductNames();
 
     const sortedInJs = [...originalNames].sort();
 
-    assert.isAbove(products.length, 0, "Should display some products");
+    assert.isAbove(originalNames.length, 0, "Should display some products");
     assert.deepEqual(originalNames, sortedInJs, "Products are not sorted alphabetically!");
   });
-
   it("4. Add product to shopping cart", async () => {
-    await $('[data-test="search-query"]').setValue("Claw Hammer");
-    await $('[data-test="search-submit"]').click();
-    const clawHammerItem = await $("h5=Claw Hammer");
-    await clawHammerItem.waitForDisplayed();
-    await clawHammerItem.click();
-
-    await $('[data-test="add-to-cart"]').click();
-    const cartBadge = await $('[data-test="cart-quantity"]');
-    await cartBadge.waitForDisplayed();
-    const count = await cartBadge.getText();
-
+    const productName = "Claw Hammer";
+    await HomePage.open();
+    await HomePage.searchForProduct(productName);
+    await HomePage.openProductDetails(productName);
+    await ProductPage.addToCart();
+    const count = await Navbar.getCartQuantity();
     expectChai(count).to.equal("1");
   });
-
   it("5. Successful checkout", async () => {
-    const signInLink = await $('[data-test="nav-sign-in"]');
-    if (await signInLink.isDisplayed()) {
-      await signInLink.click();
-      await $("#email").setValue(userEmail);
-      await $("#password").setValue(password);
-      await $('[data-test="login-submit"]').click();
-      await $('h1[data-test="page-title"]').waitForDisplayed();
-    }
-
-    const cartBadge = await $('[data-test="cart-quantity"]');
-
-    if (!(await cartBadge.isExisting())) {
-      console.log("Cart is empty");
-
-      await browser.url(baseUrl);
-      await $(".card-img-top").click();
-
-      const addBtn = await $('[data-test="add-to-cart"]');
-      await addBtn.waitForDisplayed();
-      await addBtn.click();
-
-      await cartBadge.waitForDisplayed();
-    }
-
-    await $('[data-test="nav-cart"]').click();
-
-    //Checkout
-    await $('[data-test="proceed-1"]').waitForClickable();
-    await $('[data-test="proceed-1"]').click();
-
-    await $('[data-test="proceed-2"]').waitForClickable();
-    await $('[data-test="proceed-2"]').click();
-
-    await $('[data-test="proceed-3"]').waitForClickable();
-    await $('[data-test="proceed-3"]').click();
-
-    const paymentDropdown = await $('select[data-test="payment-method"]');
-    await paymentDropdown.selectByVisibleText("Cash on Delivery");
-
-    await $('[data-test="finish"]').waitForClickable();
-    await $('[data-test="finish"]').click();
-
-    const successMessage = await $('[data-test="payment-success-message"]');
-    await successMessage.waitForDisplayed();
-    const messageText = await successMessage.getText();
-    messageText.should.equal("Payment was successful");
+    await Navbar.goToCart();
+    await CartPage.proceedToCheckout();
+    await CheckoutPage.completeCheckout("Cash on Delivery");
+    const confirmationText = await CheckoutPage.getSuccessMessageText();
+    expectChai(confirmationText).to.include("Payment was successful");
   });
-
   it("7. Profile: should display user details", async () => {
-    const signInLink = await $('[data-test="nav-sign-in"]');
+    await Navbar.goToMyAccount();
+    await ProfilePage.openProfileTab();
 
-    if (await signInLink.isDisplayed()) {
-      await signInLink.click();
-      await $("#email").setValue(userEmail);
-      await $("#password").setValue(password);
-      await $('[data-test="login-submit"]').click();
-
-      await browser.waitUntil(async () => {
-        const title = await $('h1[data-test="page-title"]').getText();
-        return title === "My account";
-      });
-    }
-
-    const userMenuDropdown = await $('[data-test="nav-menu"]');
-    await userMenuDropdown.waitForDisplayed();
-    await userMenuDropdown.click();
-
-    const myAccountOption = await $('[data-test="nav-my-account"]');
-    await myAccountOption.waitForDisplayed();
-    await myAccountOption.click();
-
-    const profileLink = await $('[data-test="nav-profile"]');
-    await profileLink.waitForDisplayed();
-    await profileLink.click();
-
-    const emailField = await $("#email");
-    await emailField.waitForDisplayed();
-
-    await browser.waitUntil(
-      async () => {
-        const val = await emailField.getValue();
-        return val !== "";
-      },
-      { timeout: 5000, timeoutMsg: "Profile data did not load (empty email)" },
-    );
-
-    const emailValue = await emailField.getValue();
-
-    assert.equal(emailValue, userEmail, "Email in profile should match registration email");
+    const emailValue = await ProfilePage.getSavedEmail();
+    assert.equal(emailValue, process.env.TEST_USER_EMAIL, "Email in profile should match the logged in user email");
   });
-
   it("8. Favorites: should add item to favorites", async () => {
-    await $('[data-test="nav-home"]').click();
+    const productName = "Sheet Sander";
+    await HomePage.open();
 
-    await $('[data-test="search-query"]').setValue("Sheet Sander");
-    await $('[data-test="search-submit"]').click();
+    await HomePage.searchForProduct(productName);
 
-    const product = await $("h5=Sheet Sander");
-    await product.waitForDisplayed();
-    await product.click();
+    await HomePage.openProductDetails(productName);
 
-    const addToFavoritesBtn = await $('[data-test="add-to-favorites"]');
+    await ProductPage.addToFavorites();
 
-    await addToFavoritesBtn.waitForDisplayed();
-    await addToFavoritesBtn.click();
+    await Navbar.goToMyFavorites();
 
-    const userMenu = await $('[data-test="nav-menu"]');
-    await userMenu.waitForDisplayed();
-    await userMenu.click();
-
-    const myFavoritesOption = await $('[data-test="nav-my-favorites"]');
-    await myFavoritesOption.waitForDisplayed();
-    await myFavoritesOption.click();
-
-    const favoriteItem = await $("h5=Sheet Sander");
-    await favoriteItem.waitForDisplayed();
-
-    const isPresent = await favoriteItem.isDisplayed();
+    const isPresent = await FavoritesPage.isProductInFavorites(productName);
 
     expectChai(isPresent).to.be.true;
   });
